@@ -21,12 +21,36 @@ export function VoteButton({
   votes,
 }: VoteButtonProps) {
   // TODO: useOptimistic here to fix cached vote count bug
-  const [hasOptimisticallyVoted, setHasOptimisticallyVoted] = useState(false);
+  const [hasOptimisticallyVoted, setHasOptimisticallyVoted] = useState<
+    null | boolean
+  >(null);
 
   const hasVoted =
-    initialState === "voted" ||
-    initialState === "authored" ||
-    hasOptimisticallyVoted;
+    hasOptimisticallyVoted !== null
+      ? hasOptimisticallyVoted
+      : initialState === "voted" || initialState === "authored";
+
+  let actualVotes = votes ?? 0;
+
+  // voteCount = 1
+  // initialState === "voted"
+  // hasOptimisticallyVoted === null => voteCount + 1 => 2
+  // hasOptimisticallyVoted === true => voteCount + 1 => 2
+  // hasOptimisticallyVoted === false => voteCount => 1
+
+  // voteCount = 1
+  // initialState === "unvoted"
+  // hasOptimisticallyVoted === null => voteCount + 1 => 2
+  // hasOptimisticallyVoted === true => voteCount + 2 => 3
+  // hasOptimisticallyVoted === false => voteCount + 1 => 2
+  if (initialState === "voted" || initialState === "authored") {
+    actualVotes += hasOptimisticallyVoted === false ? 0 : 1;
+  } else if (initialState === "unvoted") {
+    actualVotes += hasOptimisticallyVoted === true ? 2 : 1;
+  } else {
+    const _exhaustedCheck: never = initialState;
+    throw new Error(`Invalid state: ${initialState}`);
+  }
 
   return (
     <form
@@ -57,12 +81,9 @@ export function VoteButton({
           )}
         />
       </Button>
-      <span className="font-medium">
-        {votes !== undefined &&
-          votes +
-            Number(initialState === "authored") +
-            Number(hasOptimisticallyVoted && initialState !== "voted" ? 1 : -1)}
-      </span>
+      {votes === undefined ? null : (
+        <span className="font-medium">{actualVotes}</span>
+      )}
     </form>
   );
 }

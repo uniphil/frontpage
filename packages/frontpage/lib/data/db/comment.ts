@@ -82,7 +82,7 @@ export const getCommentsForPost = cache(async (postId: number) => {
     .where(eq(schema.Comment.postId, postId))
     .innerJoin(
       schema.CommentAggregates,
-      eq(schema.Comment.id, schema.CommentAggregates.id),
+      eq(schema.Comment.id, schema.CommentAggregates.commentId),
     )
     .leftJoin(hasVoted, eq(hasVoted.commentId, schema.Comment.id))
     .orderBy(desc(schema.CommentAggregates.rank));
