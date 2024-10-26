@@ -53,6 +53,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <SpeedInsights />
           <Analytics />
         </ThemeProvider>
+        <script
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "5e64b32c70b34b1583d863032b03d9ad"}'
+        />
       </body>
     </html>
   );
