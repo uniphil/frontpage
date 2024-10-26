@@ -19,13 +19,19 @@ Docker compose file that runs the required peices of infrastructure for frontpag
 ## Setup
 
 - `docker-compose up`
-- Install the Unravel CA root certificate in your system's trust store. You can find it in the `frontpage-local-infra_caddy_data` volume at `/data/caddy/pki/authorities/unravel/root.crt`
+- Install the Unravel CA root certificate in your system's trust store. You can find it in the `frontpage-local-infra_caddy_data` volume at `/data/caddy/pki/authorities/unravel/root.crt` in your docker container volumes section.
+    - it is worth noting that depending on your browser, you may have to import the certificate into your browser profiles too as most do not check your local certificates
 - Grab the auto generated `cloudflared` tunnel URL from the logs of the `cloudflared` container
 - Create a test account with `./scripts/create-account.sh <email> <handle>`
+- Update your environment variables with:
+    - `DRAINPIPE_CONSUMER_SECRET=secret`
+    - `TURSO_CONNECTION_URL=libsql://turso.dev.unravel.fyi`
+    - `PLC_DIRECTORY_URL=https://plc.dev.unravel.fyi`
 - Go about your business
 
 > [!IMPORTANT]
 > When running Node.js based apps make sure you're setting the `NODE_OPTIONS` environment variable to `--use-openssl-ca` to tell Node.js to use the system's trust store. The scripts inside of Frontpage's `package.json` already do this for you.
+> Make sure you stop your docker container when you are done, as Cloudflare exposes port 3000 to the internet.
 
 ## Troubleshooting
 
