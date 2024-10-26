@@ -31,7 +31,8 @@ Docker compose file that runs the required peices of infrastructure for frontpag
 
 > [!IMPORTANT]
 > When running Node.js based apps make sure you're setting the `NODE_OPTIONS` environment variable to `--use-openssl-ca` to tell Node.js to use the system's trust store. The scripts inside of Frontpage's `package.json` already do this for you.
-> Make sure you stop your docker container when you are done, as Cloudflare exposes port 3000 to the internet.
+> 
+> Also, make sure you stop your docker container when you are done, as Cloudflare exposes port 3000 to the internet.
 
 ## Troubleshooting
 
