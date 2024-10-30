@@ -9,19 +9,22 @@ export function AtUriForm({
   defaultUri?: string;
   style?: React.CSSProperties;
 }) {
-  const [_state, action, isPending] = useActionState(navigateUri, undefined);
+  const [state, action, isPending] = useActionState(navigateUri, undefined);
   return (
-    <form action={action} style={{ ...style, display: "flex" }}>
-      <input
-        style={{ flexGrow: 1 }}
-        type="text"
-        name="uri"
-        key={defaultUri}
-        defaultValue={defaultUri}
-      />
-      <button type="submit" disabled={isPending}>
-        Go
-      </button>
-    </form>
+    <div style={style}>
+      <form action={action} style={{ display: "flex" }}>
+        <input
+          style={{ flexGrow: 1 }}
+          type="text"
+          name="uri"
+          key={defaultUri}
+          defaultValue={defaultUri}
+        />
+        <button type="submit" disabled={isPending}>
+          Go
+        </button>
+      </form>
+      {state?.error ? <p style={{ color: "red" }}>{state.error}</p> : null}
+    </div>
   );
 }
