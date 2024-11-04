@@ -78,7 +78,10 @@ async function getAtUriFromHttp(url: string): Promise<UriParseResult> {
     link.getAttribute("href")?.startsWith("at://"),
   );
   if (atUriAlternate) {
-    const result = parseUri(atUriAlternate.getAttribute("href")!);
+    console.log(atUriAlternate.getAttribute("href"));
+    const result = parseUri(
+      decodeURIComponent(atUriAlternate.getAttribute("href")!),
+    );
     if ("uri" in result) {
       return result;
     }
