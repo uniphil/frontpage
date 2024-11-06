@@ -4,7 +4,7 @@ import { atprotoGetRecord } from "@/lib/data/atproto/record";
 import { Commit } from "@/lib/data/atproto/event";
 import * as atprotoPost from "@/lib/data/atproto/post";
 import * as dbPost from "@/lib/data/db/post";
-import { CommentCollection, getComment } from "@/lib/data/atproto/comment";
+import * as atprotoComment from "@/lib/data/atproto/comment";
 import { VoteRecord } from "@/lib/data/atproto/vote";
 import { getPdsUrl } from "@/lib/data/atproto/did";
 import {
@@ -65,9 +65,9 @@ export async function POST(request: Request) {
       }
     }
     // repo is actually the did of the user
-    if (collection === CommentCollection) {
+    if (collection === atprotoComment.CommentCollection) {
       if (op.action === "create") {
-        const comment = await getComment({ rkey, repo });
+        const comment = await atprotoComment.getComment({ rkey, repo });
 
         const createdComment = await unauthed_createComment({
           cid: comment.cid,
@@ -117,7 +117,8 @@ export async function POST(request: Request) {
             cid: hydratedRecord.cid,
           });
         } else if (
-          hydratedVoteRecordValue.subject.uri.collection === CommentCollection
+          hydratedVoteRecordValue.subject.uri.collection ===
+          atprotoComment.CommentCollection
         ) {
           await unauthed_createCommentVote({
             cid: hydratedRecord.cid,
