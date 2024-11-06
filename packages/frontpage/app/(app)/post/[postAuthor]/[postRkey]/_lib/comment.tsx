@@ -13,12 +13,14 @@ import {
   getVerifiedHandle,
 } from "@/lib/data/atproto/identity";
 import { UserHoverCard } from "@/lib/components/user-hover-card";
+import { cn } from "@/lib/utils";
 
 type CommentProps = {
   comment: CommentModel;
   postAuthorParam: string;
   postRkey: string;
   level?: CommentLevel;
+  allowReply: boolean;
 };
 
 export function Comment({ comment, level, ...props }: CommentProps) {
@@ -42,6 +44,7 @@ async function LiveComment({
   level,
   postAuthorParam,
   postRkey,
+  allowReply,
 }: CommentProps) {
   const [postAuthorDid, handle] = await Promise.all([
     getDidFromHandleOrDid(postAuthorParam),
@@ -74,6 +77,7 @@ async function LiveComment({
         initialVoteState={
           hasAuthored ? "authored" : comment.userHasVoted ? "voted" : "unvoted"
         }
+        allowReply={allowReply}
       >
         <div className="flex items-center gap-2">
           <UserHoverCard asChild did={comment.authorDid}>
@@ -92,9 +96,7 @@ async function LiveComment({
             <TimeAgo createdAt={comment.createdAt} side="bottom" />
           </Link>
         </div>
-        <p className="whitespace-pre-wrap text-ellipsis overflow-x-hidden">
-          {comment.body}
-        </p>
+        {comment.body ? <CommentBody body={comment.body} /> : null}
       </CommentClientWrapperWithToolbar>
 
       {comment.children?.map((comment) => (
@@ -104,9 +106,29 @@ async function LiveComment({
           comment={comment}
           postAuthorParam={postAuthorParam}
           postRkey={postRkey}
+          allowReply={allowReply}
         />
       ))}
     </>
+  );
+}
+
+export function CommentBody({
+  body,
+  exerptOnly = false,
+}: {
+  body: string;
+  exerptOnly?: boolean;
+}) {
+  return (
+    <p
+      className={cn(
+        "whitespace-pre-wrap text-ellipsis overflow-x-hidden",
+        exerptOnly && "line-clamp-6",
+      )}
+    >
+      {body}
+    </p>
   );
 }
 
@@ -139,6 +161,7 @@ function DeletedComment({
           postRkey={postRkey}
           postAuthorParam={postAuthorParam}
           level={childCommentLevel}
+          allowReply={false}
         />
       ))}
     </NestComment>
