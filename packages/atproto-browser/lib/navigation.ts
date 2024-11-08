@@ -9,7 +9,9 @@ import { domainToASCII } from "url";
 
 export async function navigateAtUri(input: string) {
   // Remove all zero-width characters and weird control codes from the input
-  const sanitizedInput = input.replace(/[\u200B-\u200D\uFEFF\u202C]/g, "");
+  const sanitizedInput = input
+    .replace(/[\u200B-\u200D\uFEFF\u202C]/g, "")
+    .trim();
 
   // Try punycode encoding the input as a domain name and parse it as a handle
   const handle = parseHandle(domainToASCII(sanitizedInput) || sanitizedInput);
