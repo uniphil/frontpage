@@ -36,20 +36,17 @@ const makeValidCases = (authority: string) =>
   });
 
 const VALID_CASES = [
-  ...makeValidCases("valid-handle.com"),
+  ...makeValidCases("example.com"),
   ...makeValidCases("did:plc:hello"),
   ...makeValidCases("did:web:hello"),
+  // Unicode should be preserved, we handle punycode transformation within the fetch of the page not on navigation
+  ...makeValidCases("mañana.com"),
 
-  // punycode
-  ...PATH_SUFFIXES.flatMap((suffix) => {
-    const result = `/at/xn--maana-pta.com${suffix}`;
-    return [
-      [`mañana.com${suffix}`, result],
-      [`at://mañana.com${suffix}`, result],
-    ];
-  }),
+  ["@example.com", "/at/example.com"],
+  ["@mañana.com", "/at/mañana.com"],
 
-  ["@valid-handle.com", "/at/valid-handle.com"],
+  // Not sure about this case. Are bare hosts supported in the spec? For now we allow it to error out at a later stage
+  ["host", "/at/host"],
 ];
 
 describe("navigates valid input", () => {
@@ -73,9 +70,8 @@ describe("strips whitespace and zero-width characters from valid input", () => {
 
 describe("shows error on invalid input", () => {
   test.each([
-    ["@", "Invalid URI: @"],
-    ["@invalid", "Invalid URI: @invalid"],
-    // ["invalid", "Invalid URI: invalid"],
+    ["@", "Invalid handle: @"],
+    ["@invalid", "Invalid handle: @invalid"],
   ])('"%s" -> "%s"', async (input, expectedError) => {
     expect((await navigateAtUri(input)).error).toMatch(expectedError);
   });
