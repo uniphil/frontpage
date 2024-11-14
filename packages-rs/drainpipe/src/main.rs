@@ -234,8 +234,10 @@ async fn main() -> ExitCode {
                     err => {
                         let cursor = db::get_seq(&mut ctx.db_connection).unwrap_or(-1);
                         match err {
-                            Some(Ok(_)) => {
-                                eprintln!("Received non-binary message. At sequence {cursor}");
+                            Some(Ok(msg)) => {
+                                eprintln!(
+                                    "Received non-binary message. At sequence {cursor}. \"{msg}\""
+                                );
                             }
                             Some(Err(error)) => {
                                 eprintln!(
