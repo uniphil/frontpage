@@ -66,7 +66,7 @@ export function VoteButton({
           setHasOptimisticallyVoted(true);
         }
       }}
-      className="flex items-center"
+      className="contents"
     >
       <Button
         variant="ghost"

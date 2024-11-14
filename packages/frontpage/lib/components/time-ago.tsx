@@ -7,20 +7,16 @@ import {
 export function TimeAgo({
   createdAt,
   side,
-  className,
 }: {
   createdAt: Date;
   side?: TooltipContentProps["side"];
-  className?: string;
 }) {
   return (
     <SimpleTooltip
       content={format(createdAt, "EEEE do MMMM y,  pp")}
       side={side}
     >
-      <span className={className}>
-        {formatDistance(createdAt, new Date())} ago
-      </span>
+      <span>{formatDistance(createdAt, new Date())} ago</span>
     </SimpleTooltip>
   );
 }

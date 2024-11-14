@@ -29,7 +29,7 @@ export default async function Post(props: {
   }
 
   return (
-    <div className="mx-auto max-w-4xl pt-20 divide-y-2 divide-accent">
+    <main className="mx-auto max-w-4xl space-y-6">
       <PostCard
         author={post.authorDid}
         createdAt={post.createdAt}
@@ -51,6 +51,6 @@ export default async function Post(props: {
         </Alert>
       ) : null}
       {children}
-    </div>
+    </main>
   );
 }
