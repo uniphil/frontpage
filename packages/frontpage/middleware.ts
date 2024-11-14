@@ -13,8 +13,8 @@ import {
   getOauthClientOptions,
   getSession,
   importDpopJwks,
-  oauthDiscoveryRequest,
   signOut,
+  oauthDiscoveryRequest,
 } from "./lib/auth";
 
 export async function middleware(request: NextRequest) {
