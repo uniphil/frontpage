@@ -1,268 +1,173 @@
-use db::{record_dead_letter, update_seq};
-use debug_ignore::DebugIgnore;
-use diesel::{
-    backend::Backend,
-    deserialize::{FromSql, FromSqlRow},
-    expression::AsExpression,
-    serialize::ToSql,
-    sql_types::Integer,
-    sqlite::SqliteConnection,
+mod config;
+mod jetstream;
+
+use chrono::{TimeZone, Utc};
+use config::Config;
+use jetstream::event::{CommitEvent, JetstreamEvent};
+use jetstream::{
+    DefaultJetstreamEndpoints, JetstreamCompression, JetstreamConfig, JetstreamConnector,
 };
-use futures::{StreamExt as _, TryFutureExt};
-use serde::Serialize;
-use std::{path::PathBuf, process::ExitCode, time::Duration};
-use tokio_tungstenite::tungstenite::{client::IntoClientRequest, protocol::Message};
+use serde_json::json;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::vec;
+use tokio::time::timeout;
 
-mod db;
-mod firehose;
-mod schema;
-
-#[repr(i32)]
-#[derive(Debug, AsExpression, PartialEq, FromSqlRow)]
-#[diesel(sql_type = Integer)]
-pub enum ProcessErrorKind {
-    DecodeError,
-    ProcessError,
-}
-
-impl<DB> ToSql<Integer, DB> for ProcessErrorKind
-where
-    i32: ToSql<Integer, DB>,
-    DB: Backend,
-{
-    fn to_sql<'b>(
-        &'b self,
-        out: &mut diesel::serialize::Output<'b, '_, DB>,
-    ) -> diesel::serialize::Result {
-        match self {
-            ProcessErrorKind::DecodeError => 0.to_sql(out),
-            ProcessErrorKind::ProcessError => 1.to_sql(out),
-        }
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Load environment variables from .env.local and .env when ran with cargo run
+    if let Some(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR").ok() {
+        let env_path: PathBuf = [&manifest_dir, ".env.local"].iter().collect();
+        dotenv_flow::from_filename(env_path)?;
+        let env_path: PathBuf = [&manifest_dir, ".env"].iter().collect();
+        dotenv_flow::from_filename(env_path)?;
     }
-}
 
-impl<DB> FromSql<Integer, DB> for ProcessErrorKind
-where
-    DB: Backend,
-    i32: FromSql<Integer, DB>,
-{
-    fn from_sql(bytes: <DB as Backend>::RawValue<'_>) -> diesel::deserialize::Result<Self> {
-        match i32::from_sql(bytes)? {
-            0 => Ok(ProcessErrorKind::DecodeError),
-            1 => Ok(ProcessErrorKind::ProcessError),
-            x => Err(format!("Unrecognized variant {}", x).into()),
-        }
-    }
-}
+    env_logger::init();
 
-#[derive(Debug)]
-struct ProcessError {
-    seq: i64,
-    inner: anyhow::Error,
-    source: DebugIgnore<Vec<u8>>,
-    kind: ProcessErrorKind,
-}
+    let monitor = tokio_metrics::TaskMonitor::new();
 
-/// Process a message from the firehose. Returns the sequence number of the message or an error.
-async fn process(message: Vec<u8>, ctx: &mut Context) -> Result<i64, ProcessError> {
-    let (_header, data) = firehose::read(&message).map_err(|e| ProcessError {
-        inner: e.into(),
-        seq: -1,
-        source: message.clone().into(),
-        kind: ProcessErrorKind::DecodeError,
-    })?;
-    let sequence = match data {
-        firehose::SubscribeRepos::Commit(commit) => {
-            let frontpage_ops = commit
-                .operations
-                .iter()
-                .filter(|op| op.path.starts_with("fyi.unravel.frontpage."))
-                .collect::<Vec<_>>();
-            if !frontpage_ops.is_empty() {
-                process_frontpage_ops(&frontpage_ops, &commit, &ctx)
-                    .map_err(|e| ProcessError {
-                        seq: commit.sequence,
-                        inner: e,
-                        source: message.clone().into(),
-                        kind: ProcessErrorKind::ProcessError,
-                    })
-                    .await?;
+    let config = Config::from_env()?;
+    let store = drainpipe_store::Store::open(&config.store_location)?;
+    let endpoint = config
+        .jetstream_url
+        .clone()
+        .unwrap_or(DefaultJetstreamEndpoints::USEastTwo.into());
+
+    loop {
+        let existing_cursor = store
+            .get_cursor()?
+            .map(|ts| {
+                Utc.timestamp_micros(ts as i64)
+                    .earliest()
+                    .ok_or(anyhow::anyhow!("Could not convert timestamp to Utc"))
+            })
+            .transpose()?;
+
+        let receiver = connect(JetstreamConfig {
+            endpoint: endpoint.clone(),
+            wanted_collections: vec!["fyi.unravel.frontpage.*".to_string()],
+            wanted_dids: vec![],
+            compression: JetstreamCompression::Zstd,
+            // Connect 10 seconds before the most recently received cursor
+            cursor: existing_cursor.map(|c| c - Duration::from_secs(10)),
+        })
+        .await?;
+
+        let metric_logs_abort_handler = {
+            let metrics_monitor = monitor.clone();
+            tokio::spawn(async move {
+                for interval in metrics_monitor.intervals() {
+                    log::info!("{:?} per second", interval.instrumented_count as f64 / 5.0,);
+                    tokio::time::sleep(Duration::from_millis(5000)).await;
+                }
+            })
+            .abort_handle()
+        };
+
+        loop {
+            match receiver.recv_async().await {
+                Ok(event) => {
+                    monitor
+                        .instrument(async {
+                            if let JetstreamEvent::Commit(ref commit) = event {
+                                println!("Received commit: {:?}", commit);
+
+                                send_frontpage_commit(&config, commit).await.or_else(|e| {
+                                    log::error!("Error processing commit: {:?}", e);
+                                    store.record_dead_letter(&drainpipe_store::DeadLetter::new(
+                                        commit.info().time_us.to_string(),
+                                        serde_json::to_string(commit)?,
+                                        e.to_string(),
+                                    ))
+                                })?
+                            }
+
+                            store.set_cursor(event.info().time_us)?;
+
+                            Ok(()) as anyhow::Result<()>
+                        })
+                        .await?
+                }
+
+                Err(e) => {
+                    log::error!("Error receiving event: {:?}", e);
+                    break;
+                }
             }
-            commit.sequence
         }
-        msg => msg.sequence(),
-    };
 
-    Ok(sequence)
+        metric_logs_abort_handler.abort();
+        log::info!("WebSocket connection closed, attempting to reconnect...");
+    }
 }
 
-fn i64_serialize<S>(x: &i64, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    s.serialize_str(&x.to_string())
+async fn connect(config: JetstreamConfig) -> anyhow::Result<flume::Receiver<JetstreamEvent>> {
+    let jetstream = JetstreamConnector::new(config)?;
+    let mut retry_delay_seconds = 1;
+
+    loop {
+        match timeout(Duration::from_secs(10), jetstream.connect()).await {
+            Ok(Ok(receiver)) => return Ok(receiver),
+            Ok(Err(e)) => {
+                log::error!("WebSocket error. Retrying... {}", e);
+            }
+            Err(e) => {
+                log::error!("Timed out after {e} connecting to WebSocket, retrying...");
+            }
+        }
+
+        // Exponential backoff
+        tokio::time::sleep(Duration::from_secs(retry_delay_seconds)).await;
+
+        // Cap the delay at 16s
+        retry_delay_seconds = std::cmp::min(retry_delay_seconds * 2, 16);
+    }
 }
 
-#[derive(Serialize, Debug)]
-struct ConsumerBody<'a> {
-    ops: &'a Vec<&'a firehose::SubscribeReposCommitOperation>,
-    repo: &'a str,
-    #[serde(serialize_with = "i64_serialize")]
-    seq: i64,
-}
-
-async fn process_frontpage_ops(
-    ops: &Vec<&firehose::SubscribeReposCommitOperation>,
-    commit: &firehose::SubscribeReposCommit,
-    ctx: &Context,
+async fn send_frontpage_commit(
+    cfg: &Config,
+    commit: &jetstream::event::CommitEvent,
 ) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
+
+    // Structure of the "ops" json array and the body of the request in general is a little whacky because it's
+    // matching the old drainpipe code where we would send the relay event to the consumer verbatim.
+    // There is potential for improvement here.
+    let ops = match commit {
+        CommitEvent::Update { .. } => anyhow::bail!("Update commits are not supported"),
+        CommitEvent::Create { commit, .. } => json!([{
+            "action": "create",
+            "path": format!("{}/{}", commit.info.collection.to_string(), commit.info.rkey),
+            "cid": commit.cid,
+        }]),
+        CommitEvent::Delete { commit, .. } => json!([{
+            "action": "delete",
+            "path": format!("{}/{}", commit.collection.to_string(), commit.rkey)
+        }]),
+    };
+
+    let commit_info = commit.info();
+
     let response = client
-        .post(&ctx.frontpage_consumer_url)
+        .post(&cfg.frontpage_consumer_url)
         .header(
             "Authorization",
-            format!("Bearer {}", ctx.frontpage_consumer_secret),
+            format!("Bearer {}", cfg.frontpage_consumer_secret),
         )
-        .json(&ConsumerBody {
-            ops,
-            repo: &commit.repo,
-            seq: commit.sequence,
-        })
+        .json(&json!({
+            "repo": commit_info.did,
+            "seq": commit_info.time_us.to_string(),
+            "ops": ops
+        }))
         .send()
         .await?;
 
     let status = response.status();
     if status.is_success() {
-        println!("Successfully sent frontpage ops");
+        log::info!("Successfully sent frontpage ops");
     } else {
         anyhow::bail!("Failed to send frontpage ops: {:?}", status)
     }
     Ok(())
-}
-
-struct Context {
-    frontpage_consumer_secret: String,
-    frontpage_consumer_url: String,
-    db_connection: SqliteConnection,
-}
-
-#[tokio::main]
-async fn main() -> ExitCode {
-    // Load environment variables from .env.local and .env when ran with cargo run
-    if let Some(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR").ok() {
-        let env_path: PathBuf = [&manifest_dir, ".env.local"].iter().collect();
-        dotenv_flow::from_filename(env_path).ok();
-        let env_path: PathBuf = [&manifest_dir, ".env"].iter().collect();
-        dotenv_flow::from_filename(env_path).ok();
-    }
-
-    let relay_url = std::env::var("RELAY_URL").unwrap_or("wss://bsky.network".into());
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL not set");
-    let conn = db::db_connect(&database_url).expect("Failed to connect to db");
-    let mut ctx = Context {
-        frontpage_consumer_secret: std::env::var("FRONTPAGE_CONSUMER_SECRET")
-            .expect("FRONTPAGE_CONSUMER_SECRET not set"),
-        frontpage_consumer_url: std::env::var("FRONTPAGE_CONSUMER_URL")
-            .expect("FRONTPAGE_CONSUMER_URL not set"),
-        db_connection: conn,
-    };
-
-    db::run_migrations(&mut ctx.db_connection).expect("Failed to run migrations");
-
-    let metrics_monitor = tokio_metrics::TaskMonitor::new();
-    {
-        let metrics_monitor = metrics_monitor.clone();
-        tokio::spawn(async move {
-            for interval in metrics_monitor.intervals() {
-                println!("{:?} per second", interval.instrumented_count as f64 / 5.0,);
-                tokio::time::sleep(Duration::from_millis(5000)).await;
-            }
-        });
-    }
-
-    for attempt_number in 0..5 {
-        tokio::time::sleep(Duration::from_secs(attempt_number)).await; // Exponential backoff
-
-        let connect_result = {
-            let query_string = match db::get_seq(&mut ctx.db_connection) {
-                Ok(cursor) => format!("?cursor={}", cursor),
-                Err(_) => {
-                    eprintln!("Failed to get sequence number. Starting from now.");
-                    "".into()
-                }
-            };
-            let mut ws_request = format!(
-                "{}/xrpc/com.atproto.sync.subscribeRepos{}",
-                relay_url, query_string
-            )
-            .into_client_request()
-            .unwrap();
-
-            ws_request.headers_mut().insert(
-                "User-Agent",
-                reqwest::header::HeaderValue::from_static(
-                    "drainpipe/@frontpage.fyi (@tom-sherman.com)",
-                ),
-            );
-
-            println!("Connecting to {}", ws_request.uri());
-
-            tokio_tungstenite::connect_async(ws_request).await
-        };
-
-        match connect_result {
-            Ok((mut socket, _response)) => loop {
-                match socket.next().await {
-                    Some(Ok(Message::Binary(message))) => {
-                        match metrics_monitor.instrument(process(message, &mut ctx)).await {
-                            Ok(seq) => {
-                                update_seq(&mut ctx.db_connection, seq)
-                                    .map_err(|e| {
-                                        eprint!("Failed to update sequence: {e:?}");
-                                    })
-                                    .ok();
-                            }
-                            Err(error) => {
-                                eprintln!("Error processing message: {error:?}");
-                                record_dead_letter(&mut ctx.db_connection, &error)
-                                    .map_err(|e| eprintln!("Failed to record dead letter {e:?}"))
-                                    .ok();
-                            }
-                        }
-                    }
-
-                    err => {
-                        let cursor = db::get_seq(&mut ctx.db_connection).unwrap_or(-1);
-                        match err {
-                            Some(Ok(msg)) => {
-                                eprintln!(
-                                    "Received non-binary message. At sequence {cursor}. \"{msg}\""
-                                );
-                            }
-                            Some(Err(error)) => {
-                                eprintln!(
-                                    "Error receiving message: {error:?}. At sequence {cursor}"
-                                );
-                            }
-                            None => {
-                                eprintln!("Connection closed. At sequence {cursor}");
-                            }
-                        }
-                        break;
-                    }
-                }
-            },
-            Err(error) => {
-                eprintln!(
-                    "Error connecting to {}. Waiting to reconnect: {error:?}",
-                    relay_url
-                );
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                continue;
-            }
-        }
-    }
-
-    eprintln!("Max retries exceeded. Exiting.");
-    ExitCode::FAILURE
 }

@@ -1,27 +1,26 @@
 [package]
 name = "drainpipe"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.93"
+atrium-api = "0.24.7"
+bincode = "1.3.3"
 chrono = { version = "0.4.38", features = ["serde"] }
-ciborium = "0.2.2"
-cid = { version = "0.11.1", features = ["serde-codec"] }
-debug-ignore = "1.0.5"
-diesel = { version = "2.2.0", features = ["sqlite"] }
-diesel_migrations = "2.2.0"
 dotenv-flow = "0.16.2"
-futures = "0.3.30"
+drainpipe-store = { path = "../drainpipe-store" }
+env_logger = "0.11.5"
+flume = "0.11.1"
+futures-util = "0.3"
+log = "0.4.22"
 reqwest = { version = "0.12.4", features = ["json"] }
-serde = "1.0.203"
-serde_bytes = "0.11.14"
-serde_ipld_dagcbor = "0.6.1"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.132"
+sled = "0.34.7"
+thiserror = "2.0.3"
 tokio = { version = "1.38.0", features = ["full"] }
 tokio-metrics = "0.3.1"
-tokio-tungstenite = { version = "0.23.0", features = ["native-tls"] }
-url = "2.5.0"
-
-[dependencies.libsqlite3-sys]
-version = "0.28"
-features = ["bundled"]
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
+url = "2.5.3"
+zstd = "0.13.2"
