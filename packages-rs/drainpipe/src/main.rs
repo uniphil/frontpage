@@ -6,6 +6,7 @@ use config::Config;
 use jetstream::event::{CommitEvent, JetstreamEvent};
 use jetstream::{
     DefaultJetstreamEndpoints, JetstreamCompression, JetstreamConfig, JetstreamConnector,
+    JetstreamReceiver,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -67,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
         loop {
             match receiver.recv_async().await {
-                Ok(event) => {
+                Ok(Ok(event)) => {
                     monitor
                         .instrument(async {
                             if let JetstreamEvent::Commit(ref commit) = event {
@@ -90,6 +91,14 @@ async fn main() -> anyhow::Result<()> {
                         .await?
                 }
 
+                Ok(Err(e)) => {
+                    // TODO: This should add a dead letter
+                    log::error!(
+                        "Error receiving event (possible junk event structure?): {:?}",
+                        e
+                    );
+                }
+
                 Err(e) => {
                     log::error!("Error receiving event: {:?}", e);
                     break;
@@ -103,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-async fn connect(config: JetstreamConfig) -> anyhow::Result<flume::Receiver<JetstreamEvent>> {
+async fn connect(config: JetstreamConfig) -> anyhow::Result<JetstreamReceiver> {
     let jetstream = JetstreamConnector::new(config)?;
     let mut retry_delay_seconds = 1;
 
