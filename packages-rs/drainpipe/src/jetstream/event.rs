@@ -1,4 +1,4 @@
-use atrium_api::types::string::{Cid, Did, Handle, Nsid};
+use atrium_api::types::string::{Cid, Did, Nsid};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -149,7 +149,8 @@ pub struct IdentityData {
     /// The DID of the identity.
     pub did: Did,
     /// The handle associated with the identity.
-    pub handle: Option<Handle>,
+    pub handle: Option<String>,
+    // pub handle: Option<Handle>,
     pub seq: u64,
     pub time: chrono::DateTime<Utc>,
 }

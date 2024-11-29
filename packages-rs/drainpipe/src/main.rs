@@ -99,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
 
         metric_logs_abort_handler.abort();
         log::info!("WebSocket connection closed, attempting to reconnect...");
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 
