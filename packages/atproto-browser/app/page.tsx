@@ -24,11 +24,23 @@ export default function Home() {
           Developed by{" "}
           <Link href="/at/did:plc:2xau7wbgdq4phuou2ypwuen7/app.bsky.actor.profile/self">
             @tom.frontpage.team
+          </Link>.
+        </p>
+        <p>
+          Backlinks added by{" "}
+          <Link href="/at/did:plc:hdhoaan3xa3jiuq4fg4mefid/app.bsky.actor.profile/self">
+            @bad-example.com
           </Link>
-          .{" "}
-          <a href="https://github.com/likeandscribe/frontpage/tree/main/packages/atproto-browser">
-            Source code
+          .
+        </p>
+        <p>
+          <a href="https://github.com/uniphil/frontpage/tree/main/packages/atproto-browser">
+            Forked source code
           </a>
+          ,{" "}
+          <a href="https://atproto-browser.vercel.app/">
+            the original
+          </a>.
         </p>
       </footer>
     </main>
