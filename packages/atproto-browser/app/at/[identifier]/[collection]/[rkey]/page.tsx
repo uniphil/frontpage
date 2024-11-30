@@ -43,11 +43,15 @@ export default async function RkeyPage(props: {
     );
   }
 
+  const record = (await response.json()) as JSONType;
+
+  const link = `at://${identityResult.didDocument.id}/${params.collection}/${params.rkey}`
+
   return (
     <>
       <link
         rel="alternate"
-        href={`at://${identityResult.didDocument.id}/${params.collection}/${params.rkey}`}
+        href={link}
       />
       <h2>
         Record{" "}
@@ -80,8 +84,49 @@ export default async function RkeyPage(props: {
           View raw record response
         </a>
       </small>
+
+      <h2>Backlinks 🔗</h2>
+      <Suspense
+        fallback={
+          <>
+            <h3>
+              Likes:
+              <span title="Fetching likes..." aria-busy>
+                🤔
+              </span>
+            </h3>
+            <p>&hellip;</p>
+          </>
+        }
+      >
+        <Likes link={link} />
+      </Suspense>
+      <p><em>Note: the link aggregator currently only indexes likes and does not yet have the full network backfill. Some likes may be missing.</em></p>
     </>
   );
+}
+
+async function Likes({ link }: { link: string }) {
+  let res;
+  try {
+    res = await fetch(`https://atproto-link-aggregator.fly.dev/likes?uri=${link}`);
+  } catch (e) {
+    return <h3>Likes: <span title="Failed to fetch likes">❌</span></h3>
+  }
+  if (!res.ok) {
+    return <h3>Likes: <span title="Non-ok response when fetching likes">❌</span></h3>
+  }
+  let likes;
+  try {
+    likes = await res.json();
+  } catch (e) {
+    return <h3>Likes: <span title="Failed to get json from response">❌</span></h3>
+  }
+  return <>
+    <h3>Likes: {likes.total_likes}</h3>
+    <p>Most recently liked by:</p>
+    <JSONValue data={likes.latest_dids} repo="asdfasdf" />
+  </>;
 }
 
 async function RecordVerificationBadge({
