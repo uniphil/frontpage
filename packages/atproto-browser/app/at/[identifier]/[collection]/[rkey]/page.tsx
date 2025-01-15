@@ -4,6 +4,7 @@ import { getHandle, getKey, getPds } from "@atproto/identity";
 import { verifyRecords } from "@atproto/repo";
 import { cache, Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
+import { z } from "zod";
 
 export default async function RkeyPage(props: {
   params: Promise<{
@@ -63,7 +64,12 @@ export default async function RkeyPage(props: {
           </Suspense>
         </ErrorBoundary>
       </h2>
-      <JSONValue data={getRecordResult.record} repo={didDocument.id} />
+      <div>
+        <small style={{ opacity: 0.5 }}>
+          cid: <code>{getRecordResult.record.cid}</code>
+        </small>
+      </div>
+      <JSONValue data={getRecordResult.record.value} repo={didDocument.id} />
     </>
   );
 }
@@ -152,7 +158,11 @@ async function RecordVerificationBadge({
 type GetRecordResult =
   | {
       success: true;
-      record: JSONType;
+      record: {
+        uri: string;
+        cid: string;
+        value: JSONType;
+      };
     }
   | {
       success: false;
@@ -199,9 +209,28 @@ const getRecord = cache(
       };
     }
 
+    const record = RecordValueSchema.parse(await response.json());
+
     return {
       success: true as const,
-      record: (await response.json()) as JSONType,
+      record,
     };
   },
 );
+
+const JsonTypeSchema: z.ZodType<JSONType> = z.lazy(() =>
+  z.union([
+    z.record(JsonTypeSchema),
+    z.array(JsonTypeSchema),
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+  ]),
+);
+
+const RecordValueSchema = z.object({
+  uri: z.string(),
+  cid: z.string(),
+  value: JsonTypeSchema,
+});
