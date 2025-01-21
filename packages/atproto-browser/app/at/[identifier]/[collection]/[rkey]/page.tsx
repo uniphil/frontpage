@@ -70,6 +70,11 @@ export default async function RkeyPage(props: {
         </small>
       </div>
       <JSONValue data={getRecordResult.record.value} repo={didDocument.id} />
+      <small>
+        <a href={getRecordResult.url} rel="ugc">
+          View raw record response
+        </a>
+      </small>
     </>
   );
 }
@@ -158,6 +163,7 @@ async function RecordVerificationBadge({
 type GetRecordResult =
   | {
       success: true;
+      url: string;
       record: {
         uri: string;
         cid: string;
@@ -214,6 +220,7 @@ const getRecord = cache(
     return {
       success: true as const,
       record,
+      url: getRecordUrl.toString(),
     };
   },
 );
