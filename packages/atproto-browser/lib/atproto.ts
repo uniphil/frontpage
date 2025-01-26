@@ -30,6 +30,8 @@ export const listRecords = cache(
   },
 );
 
+const DESCRIBE_REPO_KNOWN_ERRORS = ["RepoTakenDown", "RepoNotFound"] as const;
+
 export const describeRepo = cache(async (pds: string, repo: string) => {
   const describeRepoUrl = new URL(`${pds}/xrpc/com.atproto.repo.describeRepo`);
   describeRepoUrl.searchParams.set("repo", repo);
@@ -45,10 +47,8 @@ export const describeRepo = cache(async (pds: string, repo: string) => {
 
   if (!res.ok) {
     const parsed = DescribeRespoFailure.parse(body);
-    const knownError: "RepoTakenDown" | "RepoNotFound" | null =
-      parsed.error === "RepoTakenDown" || parsed.error === "RepoNotFound"
-        ? parsed.error
-        : null;
+    const knownError =
+      DESCRIBE_REPO_KNOWN_ERRORS.find((e) => e === parsed.error) ?? null;
 
     return {
       success: false as const,

@@ -35,7 +35,12 @@ export default async function RkeyPage(props: {
   );
 
   if (!getRecordResult.success) {
-    return <div>🚨 Failed to fetch record: {getRecordResult.error}</div>;
+    return (
+      <div>
+        🚨 Failed to fetch record:{" "}
+        {getRecordResult.knownError ?? getRecordResult.error}
+      </div>
+    );
   }
 
   return (
@@ -160,6 +165,8 @@ async function RecordVerificationBadge({
   return <span title="Valid record">🔒</span>;
 }
 
+const KNOWN_GET_RECORD_ERRORS = ["RecordNotFound", "InvalidRequest"] as const;
+
 type GetRecordResult =
   | {
       success: true;
@@ -172,6 +179,7 @@ type GetRecordResult =
     }
   | {
       success: false;
+      knownError: (typeof KNOWN_GET_RECORD_ERRORS)[number] | null;
       error: string;
     };
 
@@ -209,8 +217,13 @@ const getRecord = cache(
     });
 
     if (!response.ok) {
+      const parsed = GetRecordFailure.parse(await response.json());
+      const knownError =
+        KNOWN_GET_RECORD_ERRORS.find((e) => e === parsed.error) ?? null;
+
       return {
         success: false as const,
+        knownError,
         error: `${response.statusText}. URL: ${getRecordUrl.toString()}`,
       };
     }
@@ -240,4 +253,9 @@ const RecordValueSchema = z.object({
   uri: z.string(),
   cid: z.string(),
   value: JsonTypeSchema,
+});
+
+const GetRecordFailure = z.object({
+  error: z.string(),
+  message: z.string().optional(),
 });
