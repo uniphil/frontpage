@@ -3,4 +3,4 @@ export const FETCH_LIMIT = "100";
 export const BACKLINKS_FETCH_LIMIT = "100";
 export const BACKLINKS_HOST = "https://links.bsky.bad-example.com";
 export const EXAMPLE_PATH =
-  "did:plc:fpruhuo22xkm5o7ttr2ktxdo/app.bsky.feed.post/3lc6gjnqizk2n";
+  "did:plc:ny5mscvguz4r636nekozpqac/app.bsky.feed.post/3lh3ir342a22r";
