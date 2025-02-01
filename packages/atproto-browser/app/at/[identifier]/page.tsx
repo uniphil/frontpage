@@ -4,6 +4,7 @@ import { Fragment, Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { z } from "zod";
 import { DidDoc, DidHandle } from "../_lib/did-components";
+import { BacklinkSources } from "@/app/at/_lib/backlink-sources";
 import { resolveIdentity } from "@/lib/atproto-server";
 import { AtUri } from "@atproto/syntax";
 import { DidCollections } from "../_lib/collection-server";
@@ -51,6 +52,24 @@ export default async function IdentifierPage(props: {
           </ErrorBoundary>
         </Suspense>
       )}
+
+      <h2>Backlinks 🔗</h2>
+      <Suspense
+        fallback={
+          <>
+            <h3>
+              Links:
+              <span title="Fetching links..." aria-busy>
+                🤔
+              </span>
+            </h3>
+            <p>&hellip;</p>
+          </>
+        }
+      >
+        <BacklinkSources target={identityResult.didDocument.id} />
+      </Suspense>
+      <p><em>Note: the <a href="https://links.bsky.bad-example.com">link aggregator</a> does not yet have the full network backfill. Some links may be missing.</em></p>
     </>
   );
 }
