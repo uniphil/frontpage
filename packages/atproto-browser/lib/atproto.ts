@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { z } from "zod";
 
-import { FETCH_LIMIT } from "@/app/consts";
+import { FETCH_LIMIT, BACKLINKS_FETCH_LIMIT, BACKLINKS_HOST } from "@/app/consts";
 
 const ListRecordsResponse = z.object({
   records: z.array(
@@ -71,3 +71,52 @@ const DescribeRespoFailure = z.object({
   error: z.string(),
   message: z.string().optional(),
 });
+
+const GetBacklinkSourcesResponse = z.object({
+  links: z.record(
+    z.string(),
+    z.record(
+      z.string(),
+      z.number().gte(0))),
+});
+
+export const getBacklinkSources = cache(async (target: string) => {
+  const getSourcesUrl = new URL(`${BACKLINKS_HOST}/links/all/count`);
+  getSourcesUrl.searchParams.set("target", target);
+  let res = await fetch(getSourcesUrl.toString());
+  if (!res.ok) {
+    console.error(res);
+    throw new Error(`Failed to get backlink sources: ${res.statusText}`);
+  }
+  return GetBacklinkSourcesResponse.parse(await res.json());
+});
+
+const ListBacklinksResponse = z.object({
+  total: z.number().gte(0),
+  linking_records: z.array(
+    z.object({
+      did: z.string(),
+      collection: z.string(),
+      rkey: z.string(),
+    }),
+  ),
+  cursor: z.string().nullable(),
+});
+
+export const listBacklinks = cache(
+  async (target: string, collection: string, path: string, cursor?: string) => {
+    const listBacklinksUrl = new URL(`${BACKLINKS_HOST}/links`);
+    listBacklinksUrl.searchParams.set("target", target);
+    listBacklinksUrl.searchParams.set("collection", collection);
+    listBacklinksUrl.searchParams.set("path", path);
+    listBacklinksUrl.searchParams.set("limit", BACKLINKS_FETCH_LIMIT);
+    if (cursor) {
+      listBacklinksUrl.searchParams.set("cursor", cursor);
+    }
+    const res = await fetch(listBacklinksUrl.toString());
+    if (!res.ok) {
+      throw new Error(`Failed to list backlinks: ${res.statusText}`);
+    }
+    return ListBacklinksResponse.parse(await res.json());
+  },
+);
