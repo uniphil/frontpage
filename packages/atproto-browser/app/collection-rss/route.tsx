@@ -6,7 +6,7 @@ import { AtUri } from "@atproto/syntax";
 
 export const revalidate = 60;
 
-const ORIGIN = "https://atproto-browser.vercel.app";
+const ORIGIN = "https://atproto-browser-plus-links.vercel.app";
 
 export async function GET(request: Request) {
   const uri = new AtUri(new URL(request.url).searchParams.get("u")!);

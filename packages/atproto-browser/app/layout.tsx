@@ -6,18 +6,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta
-          name="google-site-verification"
-          content="Ft-CpRXefaiprzpKZCqaZZWvvWMBcuFvAhkv-l3f8vU"
-        />
+        <title>unsupported app</title>
       </head>
       <body>
+        <div>
+          <p>
+            <strong style={{ color: 'tomato' }}>Unsupported: </strong>
+            this fork of <a href="https://atproto-browser.vercel.app" rel="nofollow">atproto-browser</a> is no longer supported.
+          </p>
+        </div>
         {children}
-        <script
-          defer
-          src="https://static.cloudflareinsights.com/beacon.min.js"
-          data-cf-beacon='{"token": "fc315829568c403788332c6f16ba678b"}'
-        />
       </body>
     </html>
   );
